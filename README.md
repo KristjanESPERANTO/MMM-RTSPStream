@@ -66,6 +66,17 @@ The following packages are required for the module to function fully and the ins
 
 ## Installation
 
+### Manual install
+
+Just like any other MagicMirror² module, you can install this module by navigating to your MagicMirror's `modules` directory and cloning this repository:
+
+```shell
+cd ~/MagicMirror/modules
+git clone https://github.com/shbatm/MMM-RTSPStream
+cd MMM-RTSPStream
+npm install
+```
+
 ### Quick install
 
 If you followed the default installation instructions for the [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror) project, you should be able to use the automatic installer.
@@ -102,10 +113,11 @@ npm install
        },
    ```
 
-3. Open a web-browser and navigate to: <http://your-mirror-ip:8080/MMM-RTSPStream/config.html>
-4. Use the tool to generate your config details.
-5. Copy the section you your MagicMirror `config.js` file.
-6. Restart the MagicMirror
+3. Restart the MagicMirror
+4. Open a web-browser and navigate to: <http://your-mirror-ip:8080/MMM-RTSPStream/config.html>
+5. Use the tool to generate your config details.
+6. Copy the section you your MagicMirror `config.js` file.
+7. Restart the MagicMirror
 
 ## Configuration options
 
