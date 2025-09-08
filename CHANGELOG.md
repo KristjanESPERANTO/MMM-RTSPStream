@@ -64,9 +64,9 @@ This release focuses on code modernization and maintainability improvements. The
 
 ### Changed
 
-* Snyk: Security upgrade ws from 3.3.3 to 5.2.3 by @snyk-bot in https://github.com/shbatm/MMM-RTSPStream/pull/97
-* Snyk: Security upgrade node-fetch from 2.6.7 to 3.2.10 by @shbatm in https://github.com/shbatm/MMM-RTSPStream/pull/99
-* Add option to mute VLC streams by @shbatm in https://github.com/shbatm/MMM-RTSPStream/pull/100
+- Snyk: Security upgrade ws from 3.3.3 to 5.2.3 by @snyk-bot in https://github.com/shbatm/MMM-RTSPStream/pull/97
+- Snyk: Security upgrade node-fetch from 2.6.7 to 3.2.10 by @shbatm in https://github.com/shbatm/MMM-RTSPStream/pull/99
+- Add option to mute VLC streams by @shbatm in https://github.com/shbatm/MMM-RTSPStream/pull/100
 
 ## [2.0.3](https://github.com/shbatm/MMM-RTSPStream/compare/v2.0.2-dev...v2.0.3) - Maintainance Release
 

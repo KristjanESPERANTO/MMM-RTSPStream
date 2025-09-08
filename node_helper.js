@@ -69,7 +69,7 @@ module.exports = NodeHelper.create({
       if (this.config.debug) {
         this.config[name].hideFfmpegOutput = false;
       }
-      
+
       // Configure for node-ffmpeg-stream
       const streamConfig = {
         name,
@@ -80,7 +80,7 @@ module.exports = NodeHelper.create({
           "-rtsp_transport": this.config[name].protocol || "tcp"
         }
       };
-      
+
       this.ffmpegStreams[name] = new Stream(streamConfig);
     }
   },
