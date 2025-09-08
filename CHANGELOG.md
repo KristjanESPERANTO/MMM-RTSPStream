@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1](https://github.com/shbatm/MMM-RTSPStream/compare/v3.0.0...v3.0.1) - 2025-09-08
+
+### Added
+
+- docs: add manual installation instructions to README.md
+
+### Changed
+
+- chore: bump actions/stale from 8 to 9
+- chore: update devDependencies
+- refactor: change git commands in installer script to use 'git switch'
+
+### Fixed
+
+- chore: fix linter and formatter issues
+- fix: improve user prompt handling and update test string for `package.json`
+
 ## [3.0.0](https://github.com/shbatm/MMM-RTSPStream/compare/v2.1.0...v3.0.0) - 2025-08-03 - Remove OMXPlayer Support
 
 OMXPlayer is no longer actively developed and has been deprecated. This release removes all OMXPlayer support to simplify the codebase.
