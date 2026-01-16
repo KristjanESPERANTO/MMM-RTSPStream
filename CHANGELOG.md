@@ -1,9 +1,25 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [4.0.0](https://github.com/shbatm/MMM-RTSPStream/compare/v3.0.1...v4.0.0) (2026-01-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* replace jsmpeg with webrtc
+
+### Chores
+
+* add missing devDependencies ([8aa096b](https://github.com/shbatm/MMM-RTSPStream/commit/8aa096bf7461d6f6805618edd9534483c3262c1c))
+* add release script and commit-and-tag-version dependency ([5ee8968](https://github.com/shbatm/MMM-RTSPStream/commit/5ee8968bb6c32fcd68995a06d14cb49cae75bbcc))
+* change workflow runner from ubuntu-latest to ubuntu-slim ([87e592e](https://github.com/shbatm/MMM-RTSPStream/commit/87e592e34aa10f51697f12c042916075804c8bd2))
+* update devDependencies ([60f9a51](https://github.com/shbatm/MMM-RTSPStream/commit/60f9a51c24a94e7ebc2d37dcda9c2f1836162ff5))
+
+
+### Code Refactoring
+
+* replace jsmpeg with webrtc ([44144dd](https://github.com/shbatm/MMM-RTSPStream/commit/44144dda32908b706510075f9c677759ce1e240f))
 
 ## [3.0.1](https://github.com/shbatm/MMM-RTSPStream/compare/v3.0.0...v3.0.1) - 2025-09-08
 
@@ -21,6 +37,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - chore: fix linter and formatter issues
 - fix: improve user prompt handling and update test string for `package.json`
+
+### Migration Notes
+
+If you previously used `ffmpeg` for local or remote playback:
+
+1. Remove any `protocol`, `frameRate`, `hwAccel`, and `ffmpegPort` keys from stream configs.
+2. Replace `remotePlayer: "ffmpeg"` with `remotePlayer: "webrtc"` (and add `whepUrl` per stream) or `"none"`.
+3. Ensure you have a WHEP endpoint (e.g. via a media server like MediaMTX with WHEP enabled).
+4. Leave `localPlayer: "vlc"` for hardware accelerated display on the mirror.
+
+Legacy values are ignored with a console warning.
 
 ## [3.0.0](https://github.com/shbatm/MMM-RTSPStream/compare/v2.1.0...v3.0.0) - 2025-08-03 - Remove OMXPlayer Support
 
