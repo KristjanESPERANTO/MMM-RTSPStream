@@ -15,6 +15,7 @@
     "lint": "eslint && prettier . --check",
     "lint:fix": "eslint --fix && prettier . --write",
     "preinstall": "./scripts/preinstall.sh",
+    "release": "commit-and-tag-version --config ./changelog.config.js",
     "test": "node --run lint"
   },
   "devDependencies": {
@@ -22,6 +23,7 @@
     "@eslint/js": "^9.39.2",
     "@eslint/markdown": "^7.5.1",
     "@stylistic/eslint-plugin": "^5.7.0",
+    "commit-and-tag-version": "^12.6.1",
     "eslint": "^9.39.2",
     "eslint-plugin-import-x": "^4.16.1",
     "globals": "^17.0.0",
