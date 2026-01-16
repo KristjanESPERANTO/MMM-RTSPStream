@@ -60,7 +60,7 @@ The following packages are required for the module to function fully and the ins
 
 Just like any other MagicMirror² module, you can install this module by navigating to your MagicMirror's `modules` directory and cloning this repository:
 
-```shell
+```bash
 cd ~/MagicMirror/modules
 git clone https://github.com/shbatm/MMM-RTSPStream
 cd MMM-RTSPStream
