@@ -5,7 +5,7 @@
 /* eslint-disable func-names */
 /* eslint-disable no-empty-function */
 /* eslint-disable max-lines */
-/* global JSMpeg KeyHandler MM */
+/* global KeyHandler MM WHEPClient */
 
 /*
  * MagicMirror²
@@ -24,8 +24,8 @@ Module.register("MMM-RTSPStream", {
     rotateStreams: false,
     rotateStreamTimeout: 10, // Seconds
     showSnapWhenPaused: true,
-    localPlayer: "vlc", // "ffmpeg" or "vlc"
-    remotePlayer: "none", // "ffmpeg" or "none"
+    localPlayer: "vlc", // 'vlc', 'mplayer' (hardware overlay) or 'webrtc'
+    remotePlayer: "none", // 'webrtc' (remote browsers) or 'none' (if localPlayer='webrtc', remotePlayer can be omitted)
     remoteSnaps: true, // Show remote snapshots
     moduleWidth: 384, // Width = (Stream Width + 30px margin + 2px border) * # of Streams Wide
     moduleHeight: 272, // Height = (Stream Height + 30px margin + 2px border) * # of Streams Tall
@@ -38,9 +38,9 @@ Module.register("MMM-RTSPStream", {
       snapshotType: "url", // 'url' or 'file'
       snapshotUrl: "",
       snapshotRefresh: 10, // Seconds
-      protocol: "tcp", // 'tcp' or 'udp'
-      frameRate: "30",
-      ffmpegPort: 9999,
+      /* Removed legacy ffmpeg/JSMpeg options: protocol, frameRate, ffmpegPort. */
+      // Optional: WebRTC WHEP endpoint for this stream (e.g., "http://<host>:8889/whep/<stream>")
+      whepUrl: "",
       width: 320,
       height: 240,
       muted: false
@@ -324,10 +324,28 @@ Module.register("MMM-RTSPStream", {
   },
 
   getCanvas (stream) {
+    const useWebRTC = this.instance === "LOCAL" && this.config.remotePlayer === "webrtc" || this.instance === "SERVER" && this.config.localPlayer === "webrtc";
+    // In WebRTC mode, use a <video> element as the drawing surface.
+    if (useWebRTC) {
+      const video = document.createElement("video");
+      video.id = `canvas_${stream}`;
+      video.className = "MMM-RTSPStream canvas";
+      video.setAttribute("playsinline", "");
+      video.autoplay = true;
+      try {
+        if (stream && typeof this.config[stream].muted !== "undefined") {
+          video.muted = this.config[stream].muted;
+        } else {
+          video.muted = true; // safer default for autoplay
+        }
+      } catch {
+        video.muted = true;
+      }
+      return video;
+    }
     const canvas = document.createElement("canvas");
     canvas.id = `canvas_${stream}`;
     canvas.className = "MMM-RTSPStream canvas";
-    // if (stream) { canvas.cssText = this.getCanvasSize(this.config[stream]); }
     return canvas;
   },
 
@@ -399,18 +417,17 @@ Module.register("MMM-RTSPStream", {
     const canvasId = this.config.rotateStreams
       ? "canvas_"
       : `canvas_${stream}`;
-    const canvas = document.getElementById(canvasId);
+    const surface = document.getElementById(canvasId);
     const vlcPayload = [];
 
     if (this.streams[stream].playing) {
       this.stopStream(stream);
     }
 
-    if (
-      this.instance === "SERVER" &&
-      this.config.localPlayer === "vlc"
-    ) {
-      const rect = canvas.getBoundingClientRect();
+    const webrtcActive = this.instance === "LOCAL" && this.config.remotePlayer === "webrtc" || this.instance === "SERVER" && this.config.localPlayer === "webrtc";
+
+    if (this.instance === "SERVER" && this.config.localPlayer === "vlc") {
+      const rect = surface.getBoundingClientRect();
       const offset = {};
       const payload = {name: stream};
       if (typeof this.config.moduleOffset === "object") {
@@ -443,16 +460,29 @@ Module.register("MMM-RTSPStream", {
       }
       payload.box = box;
       vlcPayload.push(payload);
-    } else {
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const sUrl = `ws://${document.location.hostname}:${this.config[stream].ffmpegPort}`;
-      const player = new JSMpeg.Player(sUrl, {
-        canvas,
-        disableGl: true,
-        audio: false
-      });
-      this.streams[stream].player = player;
+    } else if (webrtcActive) {
+      // WebRTC (WHEP) playback path (server or remote browser)
+      const {whepUrl} = this.config[stream];
+      if (whepUrl && typeof WHEPClient !== "undefined") {
+        surface.muted = this.config[stream].muted !== false; // Default muted for autoplay
+        WHEPClient.start(surface, whepUrl, {
+          audio: !this.config[stream].muted,
+          onError: (err) => Log.warn(`[${this.name}] WebRTC error for ${stream}:`, err)
+        })
+          .then((session) => {
+            this.streams[stream].webrtc = session; // {pc, stop}
+          })
+          .catch((err) => Log.error(`[${this.name}] WHEP start failed for ${stream}:`, err));
+      } else {
+        Log.warn(`[${this.name}] No WHEP URL configured for stream ${stream}`);
+      }
+    } else if (surface?.tagName === "CANVAS") {
+      // No playback path selected; show placeholder label (canvas only)
+      const ctx = surface.getContext("2d");
+      ctx.clearRect(0, 0, surface.width, surface.height);
+      ctx.font = "16px Roboto Condensed";
+      ctx.fillStyle = "white";
+      ctx.fillText(this.config[stream].name, 10, 25);
     }
 
     this.streams[stream].playing = true;
@@ -467,32 +497,48 @@ Module.register("MMM-RTSPStream", {
     const canvasId = this.config.rotateStreams
       ? "canvas_"
       : `canvas_${stream}`;
-    const canvas = document.getElementById(canvasId);
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const element = document.getElementById(canvasId);
+
+    // Handle both canvas and video elements (WebRTC mode uses <video>)
+    const isVideo = element?.tagName === "VIDEO";
+    if (isVideo) {
+      element.poster = ""; // Clear any poster
+      element.removeAttribute("src");
+      element.srcObject = null;
+    }
+
+    /*
+     * For drawing text/placeholder, we need a canvas context
+     * Video elements don't have getContext, so create an overlay or skip drawing
+     */
+    if (!isVideo && element) {
+      const ctx = element.getContext("2d");
+      ctx.clearRect(0, 0, element.width, element.height);
+      if (!snapUrl || !this.config.showSnapWhenPaused) {
+        ctx.font = "16px Roboto Condensed";
+        ctx.fillStyle = "white";
+        ctx.fillText(this.config[stream].name, 10, 25);
+      }
+    }
+
     if (snapUrl && this.config.showSnapWhenPaused) {
       this.sendSocketNotification("SNAPSHOT_START", stream);
       this.updatePlayPauseBtn(stream);
     } else {
       this.updatePlayPauseBtn(stream, true);
-      ctx.font = "16px Roboto Condensed";
-      ctx.fillStyle = "white";
-      ctx.fillText(this.config[stream].name, 10, 25);
     }
   },
 
   playAll () {
     let ps = [];
     Object.keys(this.streams).forEach((s) => {
-      if (
-        this.instance === "SERVER" ||
-        this.instance === "LOCAL" && this.config.remotePlayer === "ffmpeg"
-      ) {
+      const webrtcActive = this.instance === "LOCAL" && this.config.remotePlayer === "webrtc" || this.instance === "SERVER" && this.config.localPlayer === "webrtc";
+      if (this.instance === "SERVER" || webrtcActive) {
         const res = this.playStream(s);
         if (res.length > 0) {
           ps = ps.concat(res);
         }
-        if (!(this.instance === "SERVER" && this.config.remoteSnaps)) {
+        if (!(this.instance === "SERVER" && this.config.remoteSnaps) && !(webrtcActive && this.instance === "SERVER")) {
           this.sendSocketNotification("SNAPSHOT_STOP", s);
         }
       }
@@ -518,6 +564,18 @@ Module.register("MMM-RTSPStream", {
       } else if ("player" in this.streams[stream]) {
         this.streams[stream].player.destroy();
         delete this.streams[stream].player;
+      } else if ("webrtc" in this.streams[stream]) {
+        // Use session.stop() if available (new API), fallback to legacy
+        const session = this.streams[stream].webrtc;
+        if (typeof session.stop === "function") {
+          session.stop();
+        } else {
+          const canvasId = this.config.rotateStreams
+            ? "canvas_"
+            : `canvas_${stream}`;
+          WHEPClient.stop(document.getElementById(canvasId), session.pc);
+        }
+        delete this.streams[stream].webrtc;
       }
       this.streams[stream].playing = false;
     }
@@ -562,16 +620,11 @@ Module.register("MMM-RTSPStream", {
         this.stopStream(this.currentStream);
         this.playSnapshots(this.currentStream);
       } else {
-        if (
-          this.instance === "SERVER" && !this.config.remoteSnaps ||
-          this.instance === "LOCAL" && this.config.remotePlayer === "ffmpeg"
-        ) {
+        const webrtcActive = this.instance === "LOCAL" && this.config.remotePlayer === "webrtc" || this.instance === "SERVER" && this.config.localPlayer === "webrtc";
+        if (this.instance === "SERVER" && !this.config.remoteSnaps || webrtcActive) {
           this.sendSocketNotification("SNAPSHOT_STOP", this.currentStream);
         }
-        if (
-          this.instance === "SERVER" ||
-          this.instance === "LOCAL" && this.config.remotePlayer === "ffmpeg"
-        ) {
+        if (this.instance === "SERVER" || webrtcActive) {
           ps = this.playStream(this.currentStream);
         }
       }
@@ -585,10 +638,8 @@ Module.register("MMM-RTSPStream", {
       this.stopStream(this.selectedStream);
       this.playSnapshots(this.selectedStream);
     } else {
-      if (
-        this.instance === "SERVER" && !this.config.remoteSnaps ||
-        this.instance === "LOCAL" && this.config.remotePlayer === "ffmpeg"
-      ) {
+      const webrtcActive = this.instance === "LOCAL" && this.config.remotePlayer === "webrtc" || this.instance === "SERVER" && this.config.localPlayer === "webrtc";
+      if (this.instance === "SERVER" && !this.config.remoteSnaps || webrtcActive) {
         this.sendSocketNotification("SNAPSHOT_STOP", this.selectedStream);
       }
       if (
@@ -596,10 +647,7 @@ Module.register("MMM-RTSPStream", {
         payload.KeyState === "KEY_LONGPRESSED"
       ) {
         ps = this.playStream(this.selectedStream, true);
-      } else if (
-        this.instance === "SERVER" ||
-        this.instance === "LOCAL" && this.config.remotePlayer === "ffmpeg"
-      ) {
+      } else if (this.instance === "SERVER" || webrtcActive) {
         ps = this.playStream(this.selectedStream);
       }
     }
@@ -611,7 +659,11 @@ Module.register("MMM-RTSPStream", {
   },
 
   getScripts () {
-    return [this.file("scripts/jsmpeg.min.js")];
+    const scripts = [];
+    if (this.instance === "LOCAL" && this.config.remotePlayer === "webrtc" || this.instance === "SERVER" && this.config.localPlayer === "webrtc") {
+      scripts.push(this.file("scripts/webrtc-whep.js"));
+    }
+    return scripts;
   },
 
   getStyles () {
@@ -773,7 +825,6 @@ Module.register("MMM-RTSPStream", {
       }
     });
   },
-
   // socketNotificationReceived from helper
   socketNotificationReceived (notification, payload) {
     if (notification === "STARTED") {

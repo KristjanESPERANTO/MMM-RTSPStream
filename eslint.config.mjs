@@ -1,5 +1,5 @@
-import {defineConfig, globalIgnores} from "eslint/config";
 import css from "@eslint/css";
+import {defineConfig} from "eslint/config";
 import globals from "globals";
 import {flatConfigs as importX} from "eslint-plugin-import-x";
 import js from "@eslint/js";
@@ -7,7 +7,6 @@ import markdown from "@eslint/markdown";
 import stylistic from "@stylistic/eslint-plugin";
 
 export default defineConfig([
-  globalIgnores(["scripts/jsmpeg.min.js"]),
   {files: ["**/*.css"], plugins: {css}, language: "css/css", extends: ["css/recommended"], rules: {"css/no-important": "off", "css/use-baseline": "off"}},
   {
     files: ["**/*.{js,mjs}"],
@@ -46,5 +45,6 @@ export default defineConfig([
       "sort-keys": "off"
     }
   },
+  {files: ["demo.config.js"], rules: {"prefer-const": "off"}},
   {files: ["**/*.md"], plugins: {markdown}, language: "markdown/gfm", extends: ["markdown/recommended"]}
 ]);

@@ -61,7 +61,7 @@
 /* Next and Previous arrow */
 .MMM-RTSPStream .control {
   z-index: 55;
-  /* opacity: 0.0; */
+  opacity: 0;
   display: inline-block;
   position: absolute;
   left: 50%;

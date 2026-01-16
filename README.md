@@ -35,32 +35,20 @@ This module will show a live RTSP video stream and/or periodic snapshots on the 
 
 The following packages are required for the module to function fully and the installer will attempt to install them with `apt`:
 
-- `ffmpeg` - Video processing and transcoding
-- `vlc` - Hardware-accelerated video playback
+- `vlc` - Hardware-accelerated video playback (local screen)
 - `devilspie2` - Window positioning, sizing, and decoration removal for VLC
 - `wmctrl` - Window visibility and focus management for VLC
 
-### Node.js Dependencies
+### Optional (for WebRTC remote playback)
 
-- `jsmpeg` - Front-end video display library (included in module)
-- `node-ffmpeg-stream` - Node.js module for FFmpeg streaming backend
-- `ws` - WebSocket library for video streaming
+- A media server exposing a WHEP (WebRTC-HTTP Egress Protocol) endpoint (e.g. [MediaMTX](https://github.com/bluenviron/mediamtx))
 
-### Video Streaming Architecture
+### Architecture (v4+)
 
-#### Hardware-Accelerated Streaming (VLC)
-
-- **Requirements**: `vlc`, `devilspie2`, `wmctrl`
-- **Video flow**: Camera RTSP Stream → VLC Player (external application) → Direct hardware rendering overlaid on MagicMirror² (positioned via `devilspie2`/`wmctrl`)
-- **Benefits**: Hardware acceleration, low latency, better performance
-- **Limitations**: Local display only
-
-#### Software-Decoded Streaming (FFmpeg)
-
-- **Requirements**: `ffmpeg`, `node-ffmpeg-stream`, `jsmpeg`
-- **Video flow**: Camera RTSP Stream → `ffmpeg` pre-processor → MM module's `node_helper.js` (via `node-ffmpeg-stream`) → Web Socket (`ws`) → MagicMirror² (via `jsmpeg`)
-- **Benefits**: Remote browser viewing, cross-platform compatibility
-- **Limitations**: Higher CPU usage, potential latency
+| Path            | Use Case               | Flow                                                                                  | Notes                                                                |
+| --------------- | ---------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Local (VLC)     | Main mirror display    | RTSP Camera → VLC (external) → Hardware overlay (window managed by devilspie2/wmctrl) | Lowest CPU usage; supports fullscreen via double-click/long-press    |
+| Remote (WebRTC) | Remote browser viewing | RTSP Camera → Media Server (WHEP) → Browser `<video>` via native WebRTC               | Low latency, no transcoding in module. Provide `whepUrl` per stream. |
 
 ## Screenshot
 
@@ -130,8 +118,8 @@ It is highly recommended you use the tool included. Several sample configuration
 | `autoStart`           | Start the stream(s) automatically<br>_Default:_ `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `rotateStreams`       | `true`: Rotate through all streams in a single window<br>`false`: Display an individual window for each stream<br>_Default:_ `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `rotateStreamTimeout` | Time (in sec) to show each stream when `rotateStreams` is `true`.<br>_Default:_ `10`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `localPlayer`         | _Optional:_ Which player to use for local playback: `vlc` or `ffmpeg`.<br>_Default:_ `vlc` for hardware acceleration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `remotePlayer`        | _Optional:_ Which player to use for remote browser playback: `ffmpeg` or `none`.<br>_Default:_ `ffmpeg`. Set to `none` to disable remote playback.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `localPlayer`         | Local playback method: `vlc` (external window, hardware overlay), `mplayer` (external window), or `webrtc` (inline video element).<br>_Default:_ `vlc`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `remotePlayer`        | Remote browser playback **for additional devices** (e.g., smartphone, tablet accessing MagicMirror from network): `webrtc` or `none`.<br>_Default:_ `none`. _Note:_ Only needed if you access the mirror from other devices. Both `localPlayer` and `remotePlayer` can use `"webrtc"` with the same `whepUrl`.                                                                                                                                                                                                                                                                                                                                                           |
 | `remoteSnaps`         | _Optional:_ If `true`, module will continue to show snapshots for any remote browser windows while playing the stream locally. Using `false` will stop updating snapshots when playing locally. Use this option if you only use the local screen to save resources.<br>_Default:_ `true`.                                                                                                                                                                                                                                                                                                                                                                                  |
 | `showSnapWhenPaused`  | Whether or not to show snapshots when the stream(s) is paused.<br>_Default:_ `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `moduleWidth`         | Width in `px` of the module.<br>_Note:_ When `rotateStreams` is `false` and multiple streams are used, adjust this value to adjust the number of streams shown side by side. E.G. to show 2 streams side by side, this value should be `= 2*(Stream Width + 2*1px (border) + 2*15px (margin))`<br>_Default:_ `354px`                                                                                                                                                                                                                                                                                                                                                       |
@@ -160,35 +148,137 @@ config: {
 }
 ```
 
-| Option            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`            | _Required_ The name of the individual stream. Will be displayed when paused if snapshots are turned off.                                                                                                                                                                                                                                                                                                                                         |
-| `url`             | The url of the RTSP stream. See [this list](https://github.com/shbatm/MMM-RTSPStream/wiki/Stream-URLs-for-Various-Cameras) for paths for some common security cameras. Also see below for how to test for a valid url<br>Username and password should be passed in the url if required: `rtsp://<username>:<password>@<hostname>:<port>/<path>`<br>_Default:_ A test stream at `'rtsp://184.72.239.149/vod/mp4:BigBuckBunny_115k.mov'`,          |
-| `hdUrl`           | _Optional:_ The url for the "High-Def" stream to use when playing a full screen stream with VLC. If blank, regular url will be used.                                                                                                                                                                                                                                                                                                             |
-| `protocol`        | Protocol to use for receiving RTSP stream<br>_Default:_ `"tcp"`, valid options: `"tcp"` or `"udp"`.                                                                                                                                                                                                                                                                                                                                              |
-| `snapshotUrl`     | A string with the path to the camera snapshot. This can either be a url to camera itself (if supported) or a file path to where the snapshot is stored every X seconds by the camera. Leave blank to show just the stream title when paused.<br>Username and password should be passed in the url if required: `http://<username>:<password>@<hostname>:<port>/<path>`                                                                           |
-| `snapshotType`    | The type of snapshot path given<br>_Values:_ `url` or `file`<br>_Default:_ `url`                                                                                                                                                                                                                                                                                                                                                                 |
-| `snapshotRefresh` | How often to refresh the snapshot image (in sec).<br>_Default:_ 10 (seconds)                                                                                                                                                                                                                                                                                                                                                                     |
-| `frameRate`       | Framerate to use for the RTSP stream. Must be a string.<br>_Default:_ `"30"`                                                                                                                                                                                                                                                                                                                                                                     |
-| `width`           | The width in px of the stream.                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `height`          | The height in px of the stream.                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `absPosition`     | _Only required for VLC_ Provide an absolute potiion to show the stream. This overrides the automatic window and moduleOffset settings.<br>_Format:_ `{ top: XX, right: XX, bottom: XX, left: XX }` where `XX` is the pixel position on the screen.                                                                                                                                                                                               |
-| `ffmpegPort`      | _Only required for `ffmpeg`_ Any available port to use for the ffmpeg websocket.<br>**_Notes:_** **THIS IS NOT THE PORT FOR YOUR CAMERA** Camera stream's port must be included in the URL above. This port must be unqiue for each stream added and cannot be used by another service on the server. This is a separate WebSocket from the the Socket.IO connection between the module's script and it's `node_helper.js`.<br>_Default:_ `9999` |
-| `hwAccel`         | _Only required for `ffmpeg`_ Attempt to use Hardware Accelerated Decoding with `ffmpeg`.<br>_Default:_ `false`                                                                                                                                                                                                                                                                                                                                   |
-| `muted`           | Disable sound (_VLC only_)<br>_Default:_ `false`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Option            | Description                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | _Required_ The name of the individual stream. Will be displayed when paused if snapshots are turned off.                                                                                                                                                                                                                                                                                                                                |
+| `url`             | The url of the RTSP stream. See [this list](https://github.com/shbatm/MMM-RTSPStream/wiki/Stream-URLs-for-Various-Cameras) for paths for some common security cameras. Also see below for how to test for a valid url<br>Username and password should be passed in the url if required: `rtsp://<username>:<password>@<hostname>:<port>/<path>`<br>_Default:_ A test stream at `'rtsp://184.72.239.149/vod/mp4:BigBuckBunny_115k.mov'`, |
+| `hdUrl`           | _Optional:_ The url for the "High-Def" stream to use when playing a full screen stream with VLC. If blank, regular url will be used.                                                                                                                                                                                                                                                                                                    |
+| `whepUrl`         | _Only for WebRTC playback:_ Full WHEP endpoint URL for this stream (e.g. `http://localhost:8889/mystream/whep`). Required when `localPlayer: "webrtc"` or `remotePlayer: "webrtc"`. See [WebRTC Setup](#webrtc-setup-mediamtx) below.                                                                                                                                                                                                   |
+| `snapshotUrl`     | A string with the path to the camera snapshot. This can either be a url to camera itself (if supported) or a file path to where the snapshot is stored every X seconds by the camera. Leave blank to show just the stream title when paused.<br>Username and password should be passed in the url if required: `http://<username>:<password>@<hostname>:<port>/<path>`                                                                  |
+| `snapshotType`    | The type of snapshot path given<br>_Values:_ `url` or `file`<br>_Default:_ `url`                                                                                                                                                                                                                                                                                                                                                        |
+| `snapshotRefresh` | How often to refresh the snapshot image (in sec).<br>_Default:_ 10 (seconds)                                                                                                                                                                                                                                                                                                                                                            |
+| `frameRate`       | Framerate to use for the RTSP stream. Must be a string.<br>_Default:_ `"30"`                                                                                                                                                                                                                                                                                                                                                            |
+| `width`           | The width in px of the stream.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `height`          | The height in px of the stream.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `absPosition`     | _Only required for VLC_ Provide an absolute potiion to show the stream. This overrides the automatic window and moduleOffset settings.<br>_Format:_ `{ top: XX, right: XX, bottom: XX, left: XX }` where `XX` is the pixel position on the screen.                                                                                                                                                                                      |
+| `muted`           | Disable sound (_VLC only_)<br>_Default:_ `false`                                                                                                                                                                                                                                                                                                                                                                                        |
 
 #### Testing a camera feed
 
 To test to make sure you have a working url for a camera feed: create a text file with the URL as the first and only line in the file. Save the file as `<somename>.strm` and open the file with a video player like [VLC](https://www.videolan.org/vlc/#download).
 
-#### Advanced Stream Configurations
+### WebRTC Setup (MediaMTX)
 
-This module has been tested exclusively with streams for Hikvision (Swann) cameras. You may find that you need to adjust the `ffmpeg` settings that are used beyond just frame rate and size. The command line arguements for `ffmpeg` can be changed by editing the stream configuration options in the `node-ffmpeg-stream` module. The `ffmpeg` arguement list is passed as an options object.
+WebRTC playback (`localPlayer: "webrtc"` or `remotePlayer: "webrtc"`) requires a media server that converts RTSP to WHEP (WebRTC-HTTP Egress Protocol). [MediaMTX](https://github.com/bluenviron/mediamtx) is recommended.
 
-```shell
-# Configuration is now done via the stream configuration options
-# See: https://www.npmjs.com/package/node-ffmpeg-stream
+**Why use WebRTC instead of VLC?**
+
+- Works on Wayland without window positioning issues
+- Lower latency (~500ms vs 2-3s)
+- No external windows (renders in browser canvas)
+- Always stays on top (embedded in MagicMirror)
+
+**Quick Setup:**
+
+1. Run the setup script (downloads and starts MediaMTX):
+
+   ```bash
+   cd ~/MagicMirror/modules/MMM-RTSPStream/scripts
+   ./setup_mediamtx.sh
+   ```
+
+   For Raspberry Pi, edit `setup_mediamtx.sh` and change `ARCH="linux_amd64"` to `ARCH="linux_arm64v8"`.
+
+2. Configure your stream in `mediamtx.yml`:
+
+   ```yaml
+   paths:
+     mycamera:
+       source: rtsp://username:password@192.168.1.100:554/stream1
+   ```
+
+3. Use the WHEP URL in your MagicMirror config:
+
+   ```js
+   stream1: {
+       name: 'My Camera',
+       url: 'rtsp://192.168.1.100:554/stream1',
+       whepUrl: 'http://localhost:8889/mycamera/whep',
+       width: 640,
+       height: 480
+   }
+   ```
+
+MediaMTX will convert your RTSP stream to WebRTC and make it available at `http://localhost:8889/mycamera/whep`.
+
+**Autostart Configuration (systemd):**
+
+To automatically start MediaMTX on system boot:
+
+1. Create a systemd service file:
+
+   ```bash
+   sudo nano /etc/systemd/system/mediamtx.service
+   ```
+
+2. Add the following content (adjust paths if needed):
+
+   ```ini
+   [Unit]
+   Description=MediaMTX RTSP to WebRTC Server
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=pi
+   WorkingDirectory=/home/pi/MagicMirror/modules/MMM-RTSPStream/mediamtx
+   ExecStart=/home/pi/MagicMirror/modules/MMM-RTSPStream/mediamtx/mediamtx /home/pi/MagicMirror/modules/MMM-RTSPStream/mediamtx/mediamtx.yml
+   Restart=always
+   RestartSec=5
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   **Note:** Replace `pi` with your username and adjust paths to match your installation directory.
+
+3. Enable and start the service:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable mediamtx
+   sudo systemctl start mediamtx
+   ```
+
+4. Check status:
+
+   ```bash
+   sudo systemctl status mediamtx
+   ```
+
+MediaMTX will now start automatically on every reboot before MagicMirror.
+
+**Common Configurations:**
+
+```js
+// Single device (mirror only) - most common
+localPlayer: "webrtc",
+remotePlayer: "none"
+
+// Mirror uses VLC, allow smartphone/tablet access via WebRTC
+localPlayer: "vlc",
+remotePlayer: "webrtc"
+
+// Both mirror and remote devices use WebRTC
+localPlayer: "webrtc",
+remotePlayer: "webrtc"  // Both share the same whepUrl
 ```
+
+**Troubleshooting:**
+
+- Check MediaMTX is running: `curl http://localhost:9997/v3/config/global/get`
+- Check stream status: `curl http://localhost:9997/v3/paths/list`
+- View MediaMTX logs: `sudo journalctl -u mediamtx -f` (if running as systemd service) or check terminal output
 
 ### Controlling from other modules
 
@@ -236,22 +326,22 @@ Feel free to contribute to the module by adding any of the following features or
 ### Known Issues
 
 - snapshots can be stopped by another "instance" of the mirror running in a different window. Expected behavior: should only affect the local window.
-- `ffmpeg` streams can sometimes start and stop erratically when using a WiFi connection. For best results, use a hard-wired Ethernet connection.
-- Positioning of the VLC window seems not to work on Wayland-based systems. If you are using a Wayland compositor, you may need to use the `ffmpeg` option instead of `vlc` for local playback.
+- Positioning of the VLC window seems not to work on Wayland-based systems.
 
 ## Experimentation
 
 This section includes some untested options and configurations that may be useful in the future.
 
-### Use `ffmpeg` to capture snapshots from an RTSP Stream
+### Migrating from pre-4.0.0 (and enabling local WebRTC)
 
-```js
-// Grab a frame every x seconds and save as thumb.png:
-ffmpeg -i {RTSP_SOURCE} -f image2 -vf fps=fps=1/{x} -update 1 thumb.png
-
-// Grab the first frame from a stream and save as thumb.jpg
-ffmpeg -i {RTSP_SOURCE} -ss 00:00:01.500 -f image2 -vframes 1 thumb.png
-```
+1. Remove any `ffmpeg`-specific fields (`protocol`, `frameRate`, `ffmpegPort`, `hwAccel`).
+2. Ensure `localPlayer: "vlc"`.
+3. Choose playback mode:
+   - Local VLC + remote WebRTC → `localPlayer: "vlc"`, `remotePlayer: "webrtc"`.
+   - Local WebRTC only → `localPlayer: "webrtc"`, `remotePlayer: "none"`.
+   - Local + remote WebRTC → `localPlayer: "webrtc"`, `remotePlayer: "webrtc"`.
+4. Add `whepUrl` per stream for any WebRTC usage (both local/remote share it).
+5. Provide a WHEP endpoint (e.g. MediaMTX with `whep:` enabled in config).
 
 ## Getting Help
 
@@ -283,7 +373,27 @@ Please note that this project is released with a [Contributor Code of Conduct](C
 - `node --run lint` - Run linting and formatter checks.
 - `node --run lint:fix` - Fix linting and formatter issues.
 - `node --run test` - Run linting and formatter checks.
-- `sh scripts/start_local_rtsp_server.sh` - Start a local RTSP server with a test stream for development purposes.
+- `node --run demo` - Start MagicMirror with demo config for testing the module.
+
+**Testing with a local stream:**
+
+1. Start MediaMTX and test stream:
+
+   ```bash
+   cd scripts
+   ./setup_mediamtx.sh        # Start MediaMTX server
+   ./start_test_stream.sh     # Start FFmpeg test pattern stream
+   ```
+
+   This creates a test stream at `http://localhost:8889/test/whep`.
+
+2. Start MagicMirror demo (already configured to use the test stream):
+
+   ```bash
+   npm run demo
+   ```
+
+The demo config uses WebRTC with the local test stream. You can switch between `localPlayer: "vlc"`, `"mplayer"`, or `"webrtc"` to test different playback methods.
 
 ## License
 

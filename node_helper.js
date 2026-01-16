@@ -15,14 +15,16 @@ const path = require("path");
 const DataURI = require("datauri");
 const Log = require("logger");
 const NodeHelper = require("node_helper");
-const {Stream} = require("node-ffmpeg-stream");
 
 const environ = Object.assign(process.env, {DISPLAY: ":0"});
 
 module.exports = NodeHelper.create({
   config: {},
 
-  ffmpegStreams: {},
+  /*
+   * Removed software decoding (ffmpeg + JSMpeg) path in v4.0.0.
+   * Any legacy config referencing localPlayer/remotePlayer "ffmpeg" will be warned and ignored.
+   */
 
   vlcStream: {},
   vlcStreamTimeouts: {},
@@ -35,18 +37,10 @@ module.exports = NodeHelper.create({
   },
 
   stop () {
-    Log.log(`Shutting down MMM-RTSPStream streams that were using ${this.config.localPlayer}`);
+    Log.log(`Shutting down MMM-RTSPStream (localPlayer=${this.config.localPlayer})`);
 
-    // Kill any FFMPEG strems that are running
-    if (
-      this.config.localPlayer === "ffmpeg" ||
-      this.config.remotePlayer === "ffmpeg"
-    ) {
-      Object.keys(this.ffmpegStreams).forEach((s) => this.ffmpegStreams[s].stop());
-    }
-
-    // Kill any VLC Streams that are open
-    if (this.config.localPlayer === "vlc") {
+    // Kill any VLC/MPlayer Streams that are open
+    if (this.config.localPlayer === "vlc" || this.config.localPlayer === "mplayer") {
       if (this.dp2) {
         Log.log("Killing DevilsPie2...");
         this.dp2.stderr.removeAllListeners();
@@ -57,32 +51,9 @@ module.exports = NodeHelper.create({
     }
   },
 
-  startListener (name) {
-    if (
-      (this.config.localPlayer === "ffmpeg" ||
-        this.config.remotePlayer === "ffmpeg") &&
-        this.config[name].url
-    ) {
-      if (this.config.shutdownDelay) {
-        this.config[name].shutdownDelay = this.config.shutdownDelay * 1000;
-      }
-      if (this.config.debug) {
-        this.config[name].hideFfmpegOutput = false;
-      }
-
-      // Configure for node-ffmpeg-stream
-      const streamConfig = {
-        name,
-        url: this.config[name].url,
-        wsPort: this.config[name].ffmpegPort,
-        options: {
-          "-r": this.config[name].frameRate || "30",
-          "-rtsp_transport": this.config[name].protocol || "tcp"
-        }
-      };
-
-      this.ffmpegStreams[name] = new Stream(streamConfig);
-    }
+  // Legacy no-op retained so existing calls don't break; intentionally left minimal.
+  startListener () {
+    return undefined;
   },
 
   getData (name) {
@@ -150,7 +121,10 @@ module.exports = NodeHelper.create({
       env: environ,
       stdio: ["ignore", "ignore", "pipe"]
     };
-    const vlcCmd = "vlc";
+    const playerCmd = this.config.localPlayer === "mplayer"
+      ? "mplayer"
+      : "vlc";
+    const isMPlayer = this.config.localPlayer === "mplayer";
     const positions = {};
     let dp2Check = false;
 
@@ -169,36 +143,55 @@ module.exports = NodeHelper.create({
           }
         );
       } else {
-        // Otherwise, Generate the VLC window
-        const args = [
-          "-I",
-          "dummy",
-          "--video-on-top",
-          "--no-video-deco",
-          "--no-embedded-video",
-          `--video-title=${s.name}`,
-          this.config[s.name].url
-        ];
-        if ("fullscreen" in s && "hdUrl" in this.config[s.name]) {
-          args.pop();
-          args.push(this.config[s.name].hdUrl);
-        } else if (!("fullscreen" in s)) {
-          args.unshift(
-            "--width",
-            s.box.right - s.box.left,
-            "--height",
-            s.box.bottom - s.box.top
-          );
-          positions[s.name] = `${s.box.left}, ${s.box.top}, ${
-            s.box.right - s.box.left
-          }, ${s.box.bottom - s.box.top}`;
+        // Otherwise, Generate the player window
+        let args;
+        if (isMPlayer) {
+          // MPlayer arguments
+          args = ["-noborder", "-ontop", "-title", s.name];
+          if ("fullscreen" in s && "hdUrl" in this.config[s.name]) {
+            args.push("-fs", this.config[s.name].hdUrl);
+          } else if (!("fullscreen" in s)) {
+            const width = s.box.right - s.box.left;
+            const height = s.box.bottom - s.box.top;
+            args.push("-geometry", `${width}x${height}+${s.box.left}+${s.box.top}`);
+            args.push(this.config[s.name].url);
+            positions[s.name] = `${s.box.left}, ${s.box.top}, ${width}, ${height}`;
+          }
+          if (this.config[s.name].muted) {
+            args.splice(1, 0, "-nosound");
+          }
+        } else {
+          // VLC arguments
+          args = [
+            "-I",
+            "dummy",
+            "--video-on-top",
+            "--no-video-deco",
+            "--no-embedded-video",
+            `--video-title=${s.name}`,
+            this.config[s.name].url
+          ];
+          if ("fullscreen" in s && "hdUrl" in this.config[s.name]) {
+            args.pop();
+            args.push(this.config[s.name].hdUrl);
+          } else if (!("fullscreen" in s)) {
+            args.unshift(
+              "--width",
+              s.box.right - s.box.left,
+              "--height",
+              s.box.bottom - s.box.top
+            );
+            positions[s.name] = `${s.box.left}, ${s.box.top}, ${
+              s.box.right - s.box.left
+            }, ${s.box.bottom - s.box.top}`;
+          }
+          if (this.config[s.name].muted) {
+            args.unshift("--no-audio");
+          }
         }
-        if (this.config[s.name].muted) {
-          args.unshift("--no-audio");
-        }
-        Log.log(`Starting stream ${s.name} using VLC with args ${args.join(" ")}...`);
+        Log.log(`Starting stream ${s.name} using ${playerCmd.toUpperCase()} with args ${args.join(" ")}...`);
 
-        this.vlcStream[s.name] = child_process.spawn(vlcCmd, args, opts);
+        this.vlcStream[s.name] = child_process.spawn(playerCmd, args, opts);
 
         this.vlcStream[s.name].on("error", () => {
           Log.error(`Failed to start subprocess: ${this.vlcStream[s.name]}.`);
@@ -386,10 +379,16 @@ end
           (streams.length - 1) * this.config.rotateStreamsTimeout + 2;
         Log.warn(`WARNING: shutdownDelay is shorter than the time it takes to make it through the loop. Consider increasing to ${suggestedDelay}s.`);
       }
-      streams.forEach((name) => {
-        this.startListener(name);
-        this.sendSocketNotification("STARTED", name);
-      });
+      // Warn & sanitize legacy config values
+      if (this.config.localPlayer === "ffmpeg") {
+        Log.warn("MMM-RTSPStream: localPlayer 'ffmpeg' removed in v4.0.0. For local playback only 'vlc' is supported.");
+        this.config.localPlayer = "vlc";
+      }
+      if (this.config.remotePlayer === "ffmpeg") {
+        Log.warn("MMM-RTSPStream: remotePlayer 'ffmpeg' removed in v4.0.0. Use 'webrtc' (with whepUrl per stream) or 'none'.");
+        this.config.remotePlayer = "none";
+      }
+      streams.forEach((name) => this.sendSocketNotification("STARTED", name));
     }
     if (notification === "SNAPSHOT_START") {
       if (!(payload in this.snapshots)) {
