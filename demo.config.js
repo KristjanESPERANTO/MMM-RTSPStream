@@ -1,3 +1,5 @@
+const enableVlcDemo = process.env.RTSPSTREAM_DEMO_VLC === "1";
+
 const config = {
   address: "0.0.0.0",
   port: 8080,
@@ -12,7 +14,7 @@ const config = {
     },
     {
       module: "MMM-RTSPStream",
-      position: "middle_center",
+      position: "top_right",
       config: {
         autoStart: true,
         rotateStreams: true,
@@ -26,7 +28,7 @@ const config = {
         shutdownDelay: 12,
         stream1: {
           name: "Test Stream",
-          url: "rtsp://localhost:8554/test",
+          url: "rtsp://127.0.0.1:8554/test",
           whepUrl: "http://localhost:8889/test/whep",
           width: 640,
           height: 480,
@@ -35,7 +37,8 @@ const config = {
       }
     },
     {
-      disabled: true,
+      // Optional second instance to validate local RTSP/VLC path in parallel with WebRTC.
+      disabled: !enableVlcDemo,
       module: "MMM-RTSPStream",
       position: "bottom_left",
       config: {
@@ -50,10 +53,10 @@ const config = {
         remoteSnaps: true,
         shutdownDelay: 12,
         stream1: {
-          name: "",
-          url: "http://202.245.13.81/cgi-bin/camera?resolution=640&amp;quality=1&amp;Language=0&amp;COUNTER",
-          width: undefined,
-          height: undefined,
+          name: "RTSP VLC Test Stream",
+          url: "rtsp://127.0.0.1:8554/test",
+          width: 640,
+          height: 480,
           muted: true
         }
       }

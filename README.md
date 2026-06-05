@@ -385,6 +385,7 @@ Please note that this project is released with a [Contributor Code of Conduct](C
 - `node --run lint:fix` - Fix linting and formatter issues.
 - `node --run test` - Run linting and formatter checks.
 - `node --run demo` - Start local WebRTC demo (auto-starts MediaMTX + FFmpeg test stream, then MagicMirror with `demo.config.js`).
+- `node --run demo:dual` - Start demo with two module instances to test WebRTC and RTSP/VLC paths in parallel.
 
 **WebRTC demo flow (`node --run demo`):**
 
@@ -392,6 +393,8 @@ Please note that this project is released with a [Contributor Code of Conduct](C
 2. Publishes a local FFmpeg test stream to `rtsp://127.0.0.1:8554/test`.
 3. Launches MagicMirror with the bundled demo config (`whepUrl: http://localhost:8889/test/whep`).
 4. Stops the helper processes it started when MagicMirror exits.
+
+To test both playback paths at the same time, run `node --run demo:dual` (enables an additional VLC-based demo instance using `rtsp://127.0.0.1:8554/test`).
 
 The demo config uses WebRTC with the local test stream. You can switch between `localPlayer: "vlc"`, `"mplayer"`, or `"webrtc"` to test different playback methods.
 

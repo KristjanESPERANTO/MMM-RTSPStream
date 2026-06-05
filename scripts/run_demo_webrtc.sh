@@ -81,6 +81,11 @@ require_cmd curl
 require_cmd tar
 require_cmd ffmpeg
 
+if [[ "${RTSPSTREAM_DEMO_VLC:-0}" == "1" && "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+  echo "WARNING: demo:dual enables the VLC overlay path, which is unreliable on Wayland (wmctrl/devilspie2 limitations)."
+  echo "WARNING: If the bottom VLC demo stays blank, run from an X11 session or use WebRTC-only demo."
+fi
+
 mkdir -p "${MEDIAMTX_DIR}"
 
 if [[ ! -x "${MEDIAMTX_BIN}" ]]; then
